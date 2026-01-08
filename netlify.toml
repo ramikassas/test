@@ -1,0 +1,13 @@
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+[build.environment]
+  NODE_VERSION = "18"
+
+# Note: You must set DATABASE_URL in Netlify environment variables
+# Go to: Site settings → Environment variables → Add variable
+# DATABASE_URL = "postgresql://user:password@host:5432/dbname"
