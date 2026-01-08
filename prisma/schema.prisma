@@ -1,0 +1,147 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["fullTextSearch", "fullTextIndex"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Domain table - stores registered domain information
+model Domain {
+  id            String   @id @default(cuid())
+  name          String   @unique // Full domain name (e.g., example.com)
+  tld           String   // Top-level domain (e.g., .com, .net)
+  sld           String   // Second-level domain (e.g., example)
+  registrar     String?  // Domain registrar
+  registeredAt  DateTime? // Registration date
+  expiresAt     DateTime? // Expiration date
+  status        String?  // Domain status (active, expired, etc.)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  keywords      DomainKeyword[]
+  monitors      DomainMonitor[]
+  statistics    DomainStatistic[]
+
+  @@index([tld])
+  @@index([sld])
+  @@index([registeredAt])
+  @@fulltext([name, sld])
+}
+
+// Keywords extracted from domains
+model Keyword {
+  id            String   @id @default(cuid())
+  word          String   @unique
+  searchVolume  Int      @default(0) // Monthly search volume
+  cpc           Float?   // Cost per click
+  competition   Float?   // Competition score (0-1)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  domains       DomainKeyword[]
+  trends        KeywordTrend[]
+
+  @@index([searchVolume])
+  @@fulltext([word])
+}
+
+// Many-to-many relationship between domains and keywords
+model DomainKeyword {
+  id        String   @id @default(cuid())
+  domainId  String
+  keywordId String
+  position  Int      // Position of keyword in domain
+  createdAt DateTime @default(now())
+
+  domain    Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  keyword   Keyword  @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+
+  @@unique([domainId, keywordId])
+  @@index([keywordId])
+  @@index([domainId])
+}
+
+// Keyword trends over time
+model KeywordTrend {
+  id          String   @id @default(cuid())
+  keywordId   String
+  date        DateTime @default(now())
+  domainCount Int      @default(0) // Number of domains with this keyword
+  newDomains  Int      @default(0) // New domains registered with this keyword
+
+  keyword     Keyword  @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+
+  @@unique([keywordId, date])
+  @@index([date])
+  @@index([keywordId])
+}
+
+// Domain monitoring - track specific domains
+model DomainMonitor {
+  id          String   @id @default(cuid())
+  domainId    String
+  userId      String?  // Optional: for multi-user support
+  alertEmail  String?  // Email for alerts
+  isActive    Boolean  @default(true)
+  lastChecked DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  domain      Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  changes     DomainChange[]
+
+  @@index([domainId])
+  @@index([userId])
+  @@index([isActive])
+}
+
+// Track changes in monitored domains
+model DomainChange {
+  id          String        @id @default(cuid())
+  monitorId   String
+  changeType  String        // registrar, expiration, status, etc.
+  oldValue    String?
+  newValue    String?
+  detectedAt  DateTime      @default(now())
+
+  monitor     DomainMonitor @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+
+  @@index([monitorId])
+  @@index([detectedAt])
+}
+
+// Domain statistics - aggregated data
+model DomainStatistic {
+  id          String   @id @default(cuid())
+  domainId    String
+  date        DateTime @default(now())
+  views       Int      @default(0)
+  searches    Int      @default(0)
+
+  domain      Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  @@unique([domainId, date])
+  @@index([date])
+  @@index([domainId])
+}
+
+// TLD (Top-Level Domain) statistics
+model TldStatistic {
+  id          String   @id @default(cuid())
+  tld         String   @unique
+  totalDomains Int     @default(0)
+  newDomains  Int      @default(0) // New registrations in the last period
+  date        DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tld])
+  @@index([date])
+}
